@@ -13,6 +13,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 # --- SISTEMA DE LICENÇA ZENITH APPLICATIONS ---
 # Apenas servidores nesta lista podem usar o bot
 SERVIDORES_AUTORIZADOS = [1452042674264871076] 
+LINK_SUPORTE = "https://discord.gg/HK3vQpHQ5g"
 # -----------------------------------------------
 
 CHAR_NAME = "Zenith IA"
@@ -59,16 +60,26 @@ async def on_message(message):
         return
 
     # --- VERIFICAÇÃO DE LICENÇA ---
-    if message.guild: # Se a mensagem for em um servidor
+    if message.guild:
         if message.guild.id not in SERVIDORES_AUTORIZADOS:
             embed = discord.Embed(
                 title="⚠️ Acesso Não Autorizado",
-                description=f"Olá! Eu sou a **{CHAR_NAME}**.\n\nEste servidor não possui uma licença ativa.\n\nPara adquirir acesso, entre em contato com **Zenith Applications**.",
+                description=f"Olá! Eu sou a **{CHAR_NAME}**.\n\nEste servidor não possui uma licença ativa para meus serviços profissionais.",
                 color=0x00FFFF
             )
-            await message.channel.send(embed=embed)
-            print(f"🚫 Saída automática do servidor: {message.guild.name} ({message.guild.id})")
-            await message.guild.leave()
+            embed.add_field(
+                name="🚀 Como adquirir?", 
+                value=f"Para ativar minha licença ou tirar dúvidas, entre em nossa central oficial:\n**[Clique aqui para entrar na Zenith Applications]({LINK_SUPORTE})**", 
+                inline=False
+            )
+            embed.set_footer(text="Segurança por Zenith Systems")
+            
+            try:
+                await message.channel.send(embed=embed)
+                print(f"🚫 Saída automática do servidor: {message.guild.name} ({message.guild.id})")
+                await message.guild.leave()
+            except Exception as e:
+                print(f"Erro ao tentar sair do servidor: {e}")
             return
 
     # --- LÓGICA DE RESPOSTA ---
