@@ -10,6 +10,11 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+# --- SISTEMA DE LICENÇA ZENITH APPLICATIONS ---
+# Apenas servidores nesta lista podem usar o bot
+SERVIDORES_AUTORIZADOS = [1452042674264871076] 
+# -----------------------------------------------
+
 CHAR_NAME = "Zenith IA"
 CHAR_DETAILS = """
 - Age: 21
@@ -46,15 +51,27 @@ chat_history = []
 @client.event
 async def on_ready():
     print(f'Sucesso! Logado como {client.user}')
-    # Define uma atividade para o bot
-    await client.change_presence(activity=discord.Game(name="Otimizando a Zenith"))
+    await client.change_presence(activity=discord.Game(name="Zenith Applications"))
 
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
 
-    # O bot responde se for mencionado ou se falarem com ele no PV
+    # --- VERIFICAÇÃO DE LICENÇA ---
+    if message.guild: # Se a mensagem for em um servidor
+        if message.guild.id not in SERVIDORES_AUTORIZADOS:
+            embed = discord.Embed(
+                title="⚠️ Acesso Não Autorizado",
+                description=f"Olá! Eu sou a **{CHAR_NAME}**.\n\nEste servidor não possui uma licença ativa.\n\nPara adquirir acesso, entre em contato com **Zenith Applications**.",
+                color=0x00FFFF
+            )
+            await message.channel.send(embed=embed)
+            print(f"🚫 Saída automática do servidor: {message.guild.name} ({message.guild.id})")
+            await message.guild.leave()
+            return
+
+    # --- LÓGICA DE RESPOSTA ---
     if client.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
         try:
             async with message.channel.typing():
@@ -77,6 +94,6 @@ async def on_message(message):
                 await message.reply(reply)
         except Exception as e:
             print(f"Erro no processamento: {e}")
-            await message.channel.send("⚠️ Erro interno na matriz lógica. Verifique os logs.")
+            await message.channel.send("⚠️ Erro interno na matriz lógica.")
 
 client.run(DISCORD_TOKEN)
