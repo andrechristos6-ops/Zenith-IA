@@ -16,11 +16,11 @@ MONGO_URL = os.getenv("MONGO_URL")
 
 # --- CONFIGURAÇÕES ZENITH APPLICATIONS ---
 ID_DO_SEU_SERVIDOR = 1452042674264871076 
-ID_CARGO_CLIENTE = 123456789012345678 # <--- COLOQUE O ID DO CARGO AQUI
+ID_CARGO_CLIENTE = 1483148637893689464 # <--- LEMBRE DE TROCAR PELO ID REAL DO CARGO
 LINK_SUPORTE = "https://discord.gg/HK3vQpHQ5g"
 # -----------------------------------------------
 
-# Conexão com o Banco de Dados (Mesmo do Zenith Keys)
+# Conexão com o Banco de Dados
 db_client = AsyncIOMotorClient(MONGO_URL)
 db = db_client['test'] 
 keys_collection = db['keys']
@@ -40,11 +40,15 @@ class ZenithBot(discord.Client):
         self.tree = app_commands.CommandTree(self)
 
     async def setup_hook(self):
-        # Sincronização INSTANTÂNEA no seu servidor
+        # 1. Limpa comandos globais para evitar duplicatas
+        self.tree.clear_commands(guild=None)
+        await self.tree.sync()
+        
+        # 2. Sincroniza especificamente no seu servidor (Instantâneo)
         guild = discord.Object(id=ID_DO_SEU_SERVIDOR)
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
-        print(f"⚡ Comandos sincronizados no servidor: {ID_DO_SEU_SERVIDOR}")
+        print(f"🧹 Limpeza e Sincronização concluída no servidor: {ID_DO_SEU_SERVIDOR}")
 
 bot = ZenithBot()
 client_ai = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=GROQ_API_KEY)
@@ -55,6 +59,7 @@ async def on_ready():
     print(f'--- {CHAR_NAME} ONLINE: {bot.user} ---')
     await bot.change_presence(activity=discord.Game(name="Zenith Applications"))
     try:
+        # Testa a conexão com o banco
         await db_client.admin.command('ping')
         print("✅ Conexão com MongoDB: OK")
     except Exception as e:
@@ -65,41 +70,37 @@ async def on_ready():
 @app_commands.describe(chave="Insira a chave gerada pelo Zenith Keys")
 async def resgatar(interaction: discord.Interaction, chave: str):
     await interaction.response.defer(ephemeral=True)
-    print(f"🔎 Tentativa de resgate | Usuário: {interaction.user.name} | Chave: {chave}")
-
+    
     try:
-        # Busca a chave (usando timeout para não travar o bot)
+        # Busca a chave no banco de dados compartilhado
         dados_chave = await asyncio.wait_for(keys_collection.find_one({"key": chave}), timeout=10.0)
 
         if not dados_chave:
-            print("❌ Chave não encontrada no banco.")
             return await interaction.followup.send("❌ **Chave inválida ou inexistente.**", ephemeral=True)
 
         if dados_chave.get("used"):
-            print("⚠️ Chave já foi usada anteriormente.")
             return await interaction.followup.send("⚠️ **Esta licença já foi ativada anteriormente.**", ephemeral=True)
 
-        # Atualiza o banco
+        # Atualiza o status da chave no MongoDB
         await keys_collection.update_one(
             {"key": chave},
             {"$set": {"used": True, "usedBy": str(interaction.user.id)}}
         )
 
-        # Entrega do cargo
+        # Entrega do cargo de cliente
         cargo = interaction.guild.get_role(ID_CARGO_CLIENTE)
         if cargo:
             await interaction.user.add_roles(cargo)
-            print(f"✅ Cargo entregue para {interaction.user.name}")
         
         embed = discord.Embed(
             title="🚀 Licença Ativada | Zenith",
-            description=f"Olá {interaction.user.mention}, sua chave foi validada!\n\n**Status:** Licença Ativada\n**Cargo:** {cargo.name if cargo else 'N/A'}",
+            description=f"Olá {interaction.user.mention}, sua chave foi validada!\n\n**Status:** Licença Ativada\n**Cargo:** {cargo.mention if cargo else 'N/A'}",
             color=0x00FFFF
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
+        print(f"✅ Sucesso: {interaction.user.name} resgatou a chave {chave}")
 
     except asyncio.TimeoutError:
-        print("❌ Timeout: O banco de dados não respondeu a tempo.")
         await interaction.followup.send("⚠️ O banco de dados demorou muito a responder. Tente novamente.", ephemeral=True)
     except Exception as e:
         print(f"❌ Erro no resgate: {e}")
@@ -112,7 +113,6 @@ async def on_message(message):
 
     # Verificação de Licença do Servidor (Auto-Leave)
     if message.guild and message.guild.id not in [ID_DO_SEU_SERVIDOR]:
-        await message.channel.send("⚠️ Servidor não autorizado.")
         await message.guild.leave()
         return
 
